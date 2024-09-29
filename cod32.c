@@ -17,4 +17,4 @@ if data:
     print("Fetched data:")
     print(data)
 else:
-    print("Failed to fetch data")
+    
