@@ -1,4 +1,47 @@
-Copy
-Push to Git
-pip install requests
-Push to GitHub
+class GitFileManager {
+    createUI() {
+        // Existing elements...
+        
+        // Create a text area for file content
+        this.textArea = document.createElement('textarea');
+        this.textArea.placeholder = 'Enter file content here...';
+        this.textArea.style.width = '100%';
+        this.textArea.style.height = '100px';
+        this.fileManager.appendChild(this.textArea);
+
+        // Create an input for the file name
+        this.fileNameInput = document.createElement('input');
+        this.fileNameInput.placeholder = 'Enter file name here...';
+        this.fileNameInput.style.width = '100%';
+        this.fileManager.appendChild(this.fileNameInput);
+
+        // Create a button to push the new file to GitHub
+        this.pushButton = document.createElement('button');
+        this.pushButton.textContent = 'Push File';
+        this.pushButton.addEventListener('click', () => this.pushFile());
+        this.fileManager.appendChild(this.pushButton);
+    }
+
+    // Method to handle the push action
+    pushFile() {
+        const fileName = this.fileNameInput.value.trim();
+        const content = this.textArea.value;
+
+        if (!fileName || !content) {
+            alert("Please provide both a file name and file content.");
+            return;
+        }
+
+        chrome.runtime.sendMessage({
+            action: "pushNewFile",
+            fileName: fileName,
+            content: content
+        }, (response) => {
+            if (response.success) {
+                alert("File pushed successfully!");
+            } else {
+                alert("Error pushing file: " + response.message);
+            }
+        });
+    }
+}
