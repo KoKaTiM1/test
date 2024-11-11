@@ -1,0 +1,81 @@
+// Function to check if an element is a chat interface or contains a code block
+function checkElementForChatOrCode(element) {
+    // Chat interface checks
+    const hasTextArea = element.querySelector('textarea') !== null;
+    const hasMessages = element.querySelectorAll('div[class*="message"]').length > 0;
+    const hasConversationStructure = element.querySelector('div.flex.flex-col.items-center') !== null;
+
+    if (hasTextArea && hasMessages && hasConversationStructure) {
+        console.log("This element likely represents a chat interface.");
+    }
+
+    // Code block check
+    const codeBlock = element.querySelector('pre, code');
+    if (codeBlock) {
+        console.log("Code block detected.");
+        // Attempt to add a button below the code block
+        addPushButton(codeBlock);
+    }
+}
+
+// Function to add a "Push to GitHub" button below a code block
+function addPushButton(codeBlock) {
+    // Log the detected code block content for troubleshooting
+    console.log("Code block content:", codeBlock.textContent);
+
+    // Check if button already exists to avoid duplicates
+    if (!codeBlock.nextElementSibling || !codeBlock.nextElementSibling.classList.contains('push-button')) {
+        const pushButton = document.createElement('button');
+        pushButton.textContent = 'Push to GitHub';
+        pushButton.classList.add('push-button');
+        pushButton.style.marginTop = '10px';
+        pushButton.style.display = 'block';
+
+        pushButton.addEventListener('click', () => {
+            // Add logic to handle pushing code content
+            const content = codeBlock.textContent;
+            const fileName = prompt("Enter file name:");
+            if (fileName) {
+                pushToGitHub(fileName, content);
+            }
+        });
+
+        // Append the button and log if successful
+        codeBlock.parentNode.insertBefore(pushButton, codeBlock.nextSibling);
+        console.log("Push button added below code block.");
+    } else {
+        console.log("Push button already exists below this code block.");
+    }
+}
+
+// Function to handle the actual push logic (using background.js or API)
+function pushToGitHub(fileName, content) {
+    chrome.runtime.sendMessage({
+        action: "pushNewFile",
+        fileName: fileName,
+        content: content
+    }, (response) => {
+        if (response.success) {
+            alert("File pushed successfully to GitHub!");
+        } else {
+            alert("Error pushing file: " + response.message);
+        }
+    });
+}
+
+// Set up the MutationObserver to monitor the document body
+const observer = new MutationObserver((mutationsList) => {
+    for (const mutation of mutationsList) {
+        if (mutation.type === 'childList') {
+            mutation.addedNodes.forEach(node => {
+                // Only check element nodes
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    checkElementForChatOrCode(node);
+                }
+            });
+        }
+    }
+});
+
+// Start observing the body for added child elements
+observer.observe(document.body, { childList: true, subtree: true });
