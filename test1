@@ -1,9 +1,2 @@
-case "pushNewFile":
-    pushNewFile(request.fileName, request.content, request.language)
-        .then(result => sendResponse(result))
-        .catch(error => sendResponse({ 
-            success: false, 
-            message: error.message,
-            error: error.toString()
-        }));
-    return true;
+def hello():
+    print("Hello World")
