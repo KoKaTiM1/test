@@ -1,39 +1,118 @@
-function addPushButton(codeBlock) {
-    // Check if button already exists to avoid duplicates
-    if (!codeBlock.nextElementSibling || !codeBlock.nextElementSibling.classList.contains('push-button')) {
-        const pushButton = document.createElement('button');
-        pushButton.textContent = 'Push to GitHub';
-        pushButton.classList.add('push-button');
-        
-        // Style the button to match GitHub's green color
-        pushButton.style.backgroundColor = '#2ea44f'; // GitHub green
-        pushButton.style.color = '#ffffff';           // White text
-        pushButton.style.border = 'none';
-        pushButton.style.borderRadius = '6px';
-        pushButton.style.padding = '8px 16px';
-        pushButton.style.fontSize = '14px';
-        pushButton.style.cursor = 'pointer';
-        pushButton.style.marginTop = '10px';
-        pushButton.style.display = 'block';
+async function pushNewFile(fileName, content, providedLanguage = null) {
+    try {
+        const { githubToken, githubRepo, githubUsername } = await chrome.storage.sync.get([
+            'githubToken',
+            'githubRepo',
+            'githubUsername'
+        ]);
 
-        // Add hover effect for better UX
-        pushButton.addEventListener('mouseover', () => {
-            pushButton.style.backgroundColor = '#2c974b'; // Darker green on hover
-        });
-        pushButton.addEventListener('mouseout', () => {
-            pushButton.style.backgroundColor = '#2ea44f'; // Revert to original color
-        });
+        if (!githubToken || !githubRepo || !githubUsername) {
+            throw new Error("Missing GitHub settings");
+        }
 
-        pushButton.addEventListener('click', () => {
-            const content = codeBlock.textContent;
-            const fileName = prompt("Enter file name:");
-            if (fileName) {
-                pushToGitHub(fileName, content);
+        // Detect language and add extension if needed
+        const detectedLanguage = detectLanguage(fileName, content);
+        console.log('Detected language:', detectedLanguage);
+
+        // Add appropriate extension if none exists
+        let finalFileName = fileName;
+        if (!fileName.includes('.') && detectedLanguage) {
+            const extensions = {
+                python: '.py',
+                javascript: '.js',
+                java: '.java'
+            };
+            finalFileName = `${fileName}${extensions[detectedLanguage] || ''}`;
+        }
+
+        // First, check if file exists and get its SHA if it does
+        const checkFileResponse = await fetch(
+            `https://api.github.com/repos/${githubUsername}/${githubRepo}/contents/${finalFileName}`,
+            {
+                headers: {
+                    'Authorization': `token ${githubToken}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                }
             }
-        });
+        );
 
-        // Append the button below the code block
-        codeBlock.parentNode.insertBefore(pushButton, codeBlock.nextSibling);
-        console.log("Push button added below code block.");
+        let existingSha = null;
+        if (checkFileResponse.status === 200) {
+            const fileData = await checkFileResponse.json();
+            existingSha = fileData.sha;
+            console.log('Existing file found, SHA:', existingSha);
+        }
+
+        // Get default branch
+        const branchResponse = await fetch(
+            `https://api.github.com/repos/${githubUsername}/${githubRepo}`,
+            {
+                headers: {
+                    'Authorization': `token ${githubToken}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                }
+            }
+        );
+
+        if (!branchResponse.ok) {
+            throw new Error('Failed to get repository information');
+        }
+
+        const repoInfo = await branchResponse.json();
+        const defaultBranch = repoInfo.default_branch;
+
+        // Prepare content and message
+        const base64Content = btoa(unescape(encodeURIComponent(content)));
+        const commitMessage = detectedLanguage 
+            ? `${existingSha ? 'Update' : 'Add'} ${detectedLanguage} file: ${finalFileName}` 
+            : `${existingSha ? 'Update' : 'Add'} file: ${finalFileName}`;
+
+        // Prepare request body
+        const requestBody = {
+            message: commitMessage,
+            content: base64Content,
+            branch: defaultBranch
+        };
+
+        // Include SHA if file exists
+        if (existingSha) {
+            requestBody.sha = existingSha;
+        }
+
+        // Push the file
+        const response = await fetch(
+            `https://api.github.com/repos/${githubUsername}/${githubRepo}/contents/${finalFileName}`,
+            {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${githubToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            }
+        );
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to push file');
+        }
+
+        const responseData = await response.json();
+        return {
+            success: true,
+            language: detectedLanguage || 'unknown',
+            fileName: finalFileName,
+            path: responseData.content.path,
+            message: `File ${existingSha ? 'updated' : 'created'} successfully in ${defaultBranch}`,
+            url: responseData.content.html_url
+        };
+    } catch (error) {
+        console.error("Error pushing file:", error);
+        return {
+            success: false,
+            message: error.message
+        };
     }
 }
+
+// Keep your existing detectLanguage function and message listener
